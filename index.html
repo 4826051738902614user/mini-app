@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI AstroShadow · Telegram Mini App</title>
+    <!-- Telegram Web App SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg: #050000;
+            --panel: rgba(15, 5, 5, 0.9);
+            --accent-red: #b30000;
+            --accent-dim: #4a0000;
+            --text-main: #d1d1d1;
+            --text-dim: #664444;
+            --border: rgba(255, 0, 0, 0.08);
+            --radius: 16px;
+        }
+
+        /* Поддержка темы Telegram */
+        body[data-theme="light"] {
+            --bg: #f5f0f0;
+            --panel: rgba(255, 240, 240, 0.9);
+            --text-main: #220000;
+            --text-dim: #aa5555;
+            --border: rgba(179, 0, 0, 0.15);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .ambient {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background: 
+                radial-gradient(circle at 15% 15%, #300000 0%, transparent 45%),
+                radial-gradient(circle at 85% 85%, #200000 0%, transparent 45%);
+            filter: blur(120px);
+            opacity: 0.7;
+        }
+
+        /* Шапка с данными пользователя */
+        .tg-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: var(--panel);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--accent-dim);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            text-transform: uppercase;
+        }
+        .avatar img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .user-name {
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+        .close-btn {
+            background: transparent;
+            border: 1px solid var(--accent-red);
+            color: var(--accent-red);
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .close-btn:hover {
+            background: var(--accent-red);
+            color: #000;
+        }
+
+        /* Вкладки категорий */
+        .category-tabs {
+            display: flex;
+            gap: 8px;
+            padding: 16px;
+            background: var(--panel);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+        .cat-btn {
+            flex: 1;
+            background: transparent;
+            border: 1px solid var(--accent-dim);
+            color: var(--text-dim);
+            padding: 10px;
+            border-radius: 30px;
+            text-align: center;
+            font-size: 0.9rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .cat-btn.active {
+            background: var(--accent-red);
+            border-color: var(--accent-red);
+            color: #fff;
+            box-shadow: 0 0 12px var(--accent-red);
+        }
+
+        /* Контейнер со списком моделей */
+        .models-container {
+            padding: 16px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .model-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .model-list.hidden {
+            display: none;
+        }
+
+        .model-card {
+            background: rgba(20, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            padding: 18px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(2px);
+        }
+        .model-card:hover {
+            border-color: var(--accent-red);
+            transform: translateY(-2px);
+        }
+        .model-card.active {
+            border-color: var(--accent-red);
+            background: rgba(179, 0, 0, 0.15);
+            box-shadow: 0 0 20px rgba(179,0,0,0.3);
+        }
+        .model-card.premium {
+            background: radial-gradient(circle at 30% 30%, rgba(179,0,0,0.2), rgba(70,0,0,0.3));
+            border-color: #990000;
+            position: relative;
+        }
+        .model-card.premium::after {
+            content: 'PRO';
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            font-size: 0.7rem;
+            color: #ffaaaa;
+            background: #4a0000;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        .model-card b {
+            display: block;
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        .model-card span {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        /* Нижняя панель с выбором и отправкой */
+        .selection-panel {
+            background: var(--panel);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid var(--border);
+            padding: 16px;
+        }
+        .selected-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .selected-model {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        .selected-model span {
+            color: var(--accent-red);
+            font-weight: 700;
+        }
+        .tokens-left {
+            color: #ffaaaa;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .send-btn {
+            width: 100%;
+            background: #000;
+            color: #fff;
+            border: 1px solid var(--border);
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .send-btn:active {
+            background: var(--accent-red);
+            border-color: var(--accent-red);
+        }
+
+        /* Модальные окна */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(8px);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            visibility: hidden;
+            opacity: 0;
+            transition: 0.2s;
+            padding: 16px;
+        }
+        .modal-overlay.show {
+            visibility: visible;
+            opacity: 1;
+        }
+        .modal-content {
+            background: var(--panel);
+            border: 2px solid var(--accent-red);
+            border-radius: 24px;
+            padding: 24px;
+            max-width: 500px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+            color: var(--text-main);
+        }
+        .modal-content h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .close-modal {
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: var(--accent-red);
+            line-height: 1;
+        }
+        /* Таблицы сравнения */
+        .comparison-table {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            justify-content: center;
+        }
+        .comparison-col {
+            flex: 1 1 200px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 16px;
+            padding: 16px;
+        }
+        .comparison-col h3 {
+            text-align: center;
+            color: var(--accent-red);
+            margin-bottom: 16px;
+            font-size: 1.2rem;
+        }
+        .comparison-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px dashed #330000;
+        }
+        .percent {
+            font-weight: 600;
+            color: #ffaaaa;
+        }
+        .plan-comparison {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .plan-col {
+            flex: 1 1 240px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 16px;
+            padding: 16px;
+        }
+        .plan-pair-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+        .plan-pair {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 8px;
+            border-bottom: 1px dashed #330000;
+            font-size: 0.9rem;
+        }
+        .plan-pair.unavailable {
+            text-decoration: line-through;
+            color: #666;
+        }
+        .token-info {
+            text-align: center;
+            background: rgba(179,0,0,0.1);
+            padding: 8px;
+            border-radius: 8px;
+            margin: 12px 0;
+        }
+        .plan-select-btn {
+            width: 100%;
+            background: transparent;
+            border: 1px solid var(--accent-red);
+            color: var(--accent-red);
+            padding: 12px;
+            border-radius: 30px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .plan-select-btn:active {
+            background: var(--accent-red);
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient"></div>
+
+    <!-- Шапка с данными Telegram -->
+    <div class="tg-header" id="tgHeader">
+        <div class="user-info" id="userInfo"></div>
+        <button class="close-btn" id="closeApp">✕ Закрыть</button>
+    </div>
+
+    <!-- Основное приложение -->
+    <div id="app">
+        <!-- Вкладки -->
+        <div class="category-tabs">
+            <div class="cat-btn active" onclick="switchCategory('text')">Текстовые</div>
+            <div class="cat-btn" onclick="switchCategory('bit')">Битрейт</div>
+        </div>
+
+        <!-- Списки моделей -->
+        <div class="models-container">
+            <!-- Текстовые модели -->
+            <div id="text-models" class="model-list">
+                <div class="model-card active" onclick="selectModel(this, 'Nano')">
+                    <b>Nano</b>
+                    <span>Шут дурацких шуток</span>
+                </div>
+                <div class="model-card" onclick="selectModel(this, 'Quadro')">
+                    <b>Quadro</b>
+                    <span>Легкое общение</span>
+                </div>
+                <div class="model-card" onclick="selectModel(this, 'Hexa')">
+                    <b>Hexa</b>
+                    <span>Среднестатистический</span>
+                </div>
+                <div class="model-card" onclick="selectModel(this, 'Hexa+')">
+                    <b>Hexa+</b>
+                    <span>Запоминает контекст</span>
+                </div>
+                <div class="model-card" onclick="selectModel(this, 'Octo')">
+                    <b>Octo</b>
+                    <span>Максимум токенов</span>
+                </div>
+                <!-- Премиум (открывают модалку) -->
+                <div class="model-card premium" onclick="showPlanModal(); event.stopPropagation();">
+                    <b>OctoMTT</b>
+                    <span>Абсолютный лидер</span>
+                </div>
+                <div class="model-card premium" onclick="showPlanModal(); event.stopPropagation();">
+                    <b>NovaMTT</b>
+                    <span>Абсолютный лидер</span>
+                </div>
+            </div>
+
+            <!-- Битрейт модели -->
+            <div id="bit-models" class="model-list hidden">
+                <div class="model-card active" onclick="selectModel(this, 'Quadro-8')">
+                    <b>Quadro-8</b>
+                    <span>Начальный уровень</span>
+                </div>
+                <div class="model-card" onclick="selectModel(this, 'Hexa-8')">
+                    <b>Hexa-8</b>
+                    <span>Средний уровень</span>
+                </div>
+                <div class="model-card" onclick="selectModel(this, 'Hexa-16')">
+                    <b>Hexa-16</b>
+                    <span>Продвинутый</span>
+                </div>
+                <div class="model-card" onclick="selectModel(this, 'Octo-16')">
+                    <b>Octo-16</b>
+                    <span>Высокий битрейт</span>
+                </div>
+                <div class="model-card" onclick="selectModel(this, 'Octo-24')">
+                    <b>Octo-24</b>
+                    <span>Профессиональный</span>
+                </div>
+                <div class="model-card premium" onclick="showPlanModal(); event.stopPropagation();">
+                    <b>Nova-24</b>
+                    <span>Экстремальный битрейт</span>
+                </div>
+                <div class="model-card premium" onclick="showPlanModal(); event.stopPropagation();">
+                    <b>Nova-32</b>
+                    <span>Максимальный битрейт</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Нижняя панель с выбором и отправкой -->
+        <div class="selection-panel">
+            <div class="selected-info">
+                <div class="selected-model">Выбрано: <span id="currentModelName">Nano</span></div>
+                <div class="tokens-left">⚡ 20 000 токенов</div>
+            </div>
+            <button class="send-btn" id="sendDataBtn">Отправить в бот</button>
+        </div>
+    </div>
+
+    <!-- Модалка информации (сравнение) -->
+    <div id="infoModal" class="modal-overlay" onclick="if(event.target===this) hideModal('infoModal')">
+        <div class="modal-content">
+            <span class="close-modal" onclick="hideModal('infoModal')">&times;</span>
+            <h2>СРАВНЕНИЕ МОДЕЛЕЙ</h2>
+            <div class="comparison-table">
+                <div class="comparison-col">
+                    <h3>AstroShadow</h3>
+                    <div class="comparison-item"><span>Nano</span><span class="percent">6%</span></div>
+                    <div class="comparison-item"><span>Quadro</span><span class="percent">19%</span></div>
+                    <div class="comparison-item"><span>Hexa</span><span class="percent">29%</span></div>
+                    <div class="comparison-item"><span>Hexa+</span><span class="percent">55%</span></div>
+                    <div class="comparison-item"><span>Octo</span><span class="percent">57%</span></div>
+                    <div class="comparison-item"><span>OctoMTT</span><span class="percent">71%</span></div>
+                    <div class="comparison-item"><span>NovaMTT</span><span class="percent">81%</span></div>
+                </div>
+                <div class="comparison-col">
+                    <h3>Внешние LLM</h3>
+                    <div class="comparison-item"><span>DeepSeek-1</span><span class="percent">68%</span></div>
+                    <div class="comparison-item"><span>Gpt-1</span><span class="percent">74%</span></div>
+                    <div class="comparison-item"><span>Gemini-1</span><span class="percent">78%</span></div>
+                    <div class="comparison-item"><span>Gpt-2</span><span class="percent">85%</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модалка выбора плана (Premium) -->
+    <div id="planModal" class="modal-overlay" onclick="if(event.target===this) hideModal('planModal')">
+        <div class="modal-content">
+            <span class="close-modal" onclick="hideModal('planModal')">&times;</span>
+            <h2>ВЫБЕРИТЕ ПЛАН</h2>
+            <div class="plan-comparison">
+                <div class="plan-col">
+                    <h3>BASIC</h3>
+                    <div class="plan-pair-list">
+                        <div class="plan-pair"><span>Nano</span><span>Quadro-8</span></div>
+                        <div class="plan-pair"><span>Quadro</span><span>Hexa-8</span></div>
+                        <div class="plan-pair"><span>Hexa</span><span>Hexa-16</span></div>
+                        <div class="plan-pair"><span>Hexa+</span><span>Octo-16</span></div>
+                        <div class="plan-pair"><span>Octo</span><span>Octo-24</span></div>
+                        <div class="plan-pair unavailable"><span>OctoMTT</span><span>Nova-24</span></div>
+                        <div class="plan-pair unavailable"><span>NovaMTT</span><span>Nova-32</span></div>
+                    </div>
+                    <div class="token-info">20 000 токенов/день</div>
+                    <button class="plan-select-btn" onclick="alert('Basic выбран (демо)')">Basic</button>
+                </div>
+                <div class="plan-col">
+                    <h3>PRO</h3>
+                    <div class="plan-pair-list">
+                        <div class="plan-pair"><span>Nano</span><span>Quadro-8</span></div>
+                        <div class="plan-pair"><span>Quadro</span><span>Hexa-8</span></div>
+                        <div class="plan-pair"><span>Hexa</span><span>Hexa-16</span></div>
+                        <div class="plan-pair"><span>Hexa+</span><span>Octo-16</span></div>
+                        <div class="plan-pair"><span>Octo</span><span>Octo-24</span></div>
+                        <div class="plan-pair"><span>OctoMTT</span><span>Nova-24</span></div>
+                        <div class="plan-pair"><span>NovaMTT</span><span>Nova-32</span></div>
+                    </div>
+                    <div class="token-info">100 000 токенов/день</div>
+                    <button class="plan-select-btn" onclick="alert('Pro выбран (демо)')">Pro</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Инициализация Telegram Web App
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Разворачиваем на весь экран
+        tg.enableClosingConfirmation(); // Подтверждение при закрытии
+
+        // Получаем данные пользователя
+        const user = tg.initDataUnsafe?.user;
+        const header = document.getElementById('tgHeader');
+        const userInfo = document.getElementById('userInfo');
+
+        if (user) {
+            const firstName = user.first_name || '';
+            const lastName = user.last_name || '';
+            const username = user.username ? '@' + user.username : '';
+            const photoUrl = user.photo_url;
+
+            let avatarHtml = '';
+            if (photoUrl) {
+                avatarHtml = `<img src="${photoUrl}" alt="avatar">`;
+            } else {
+                const initials = (firstName.charAt(0) + (lastName.charAt(0) || '')).toUpperCase();
+                avatarHtml = `<div class="avatar">${initials || '👤'}</div>`;
+            }
+
+            userInfo.innerHTML = `
+                <div class="avatar">${avatarHtml}</div>
+                <div class="user-name">${firstName} ${lastName} ${username}</div>
+            `;
+        } else {
+            userInfo
